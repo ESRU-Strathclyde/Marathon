@@ -74,6 +74,7 @@ def get_weather(stcode, fpath, file_type="epw"):
         return wdata, locdata, header
 
     # Load data for given station.
+
     if file_type == "pickle":
         try:
             wdata_array = pd.read_pickle(fpath)
@@ -109,7 +110,6 @@ def get_weather(stcode, fpath, file_type="epw"):
             wdata = None
             header = None
             locdata = None
-
 
     elif file_type == "csv" or fpath[-4:] == ".csv":
 
@@ -152,7 +152,7 @@ def get_weather(stcode, fpath, file_type="epw"):
             locdata = None
 
     # End file_type if statement.
-
+    print('stcode '+stcode)
     locdata["loc"] = stcode
 
     if wdata is None:
@@ -375,8 +375,7 @@ def read_espr(fpath):
         clmdata = None
         locdata = None
         header = None
-        columns = None
-        return clmdata, locdata, header, columns
+        return clmdata, locdata, header        
 
     # Split the contents into a header and body.
     header = content[0:hlines]
@@ -394,10 +393,8 @@ def read_espr(fpath):
 
     locline = [line for line in header if ("latitude" in line)][0]
 
-    if iver == 0:
+    if iver == 0 or iver == 1:
         siteline = [line for line in header if ("site name" in line)][0]
-    elif iver == 1:
-        siteline = [line for line in header if ("climate location" in line)][0]
     elif iver == 2:
         siteline = header[1]
 
@@ -426,7 +423,7 @@ def read_espr(fpath):
         rhcol = 5
         esp_columns = ["dhi", "tdb", "dni", "wspd", "wdr", "rh"]
     elif iver == 1:
-        colslist = header[10].strip().split(',')
+        colslist = header[12].strip().split(',')
         esp_columns = [None]*6
         tdbcol = int(colslist[0])-1
         esp_columns[tdbcol] = 'tdb'

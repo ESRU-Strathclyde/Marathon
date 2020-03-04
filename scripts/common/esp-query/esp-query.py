@@ -754,7 +754,7 @@ for s_line in f_cfg:
             lb_outputs[i_ind]=False
         elif ls_line[0]=='*stdclm':
             # TODO: this path is currently hardcoded
-            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+'/home/esru-sim-server/esru_cowie/climate/'+ls_line[1]
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+'/home/esru/esru_cowie/climate/'+ls_line[1]
             lb_outputs[i_ind]=False
 
 
