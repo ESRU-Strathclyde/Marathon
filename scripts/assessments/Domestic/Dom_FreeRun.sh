@@ -324,7 +324,9 @@ afn_network="$(awk -f "$common_dir/esp-query/processOutput_getAFNnetwork.awk" "$
 if [ "X$afn_network" == "X" ]; then
   is_afn=false
 else
-  is_afn=true
+  is_afn=true  
+  afn_zon_nod_nums="$(awk -f "$common_dir/esp-query/processOutput_getNumCTM.awk" "$tmp_dir/query_results.txt")"
+  array_zone_AFNnodNums=($afn_zon_nod_nums)
 fi
 
 # Check for contaminant network.
@@ -333,6 +335,7 @@ if [ "X$ctm_network" == "X" ]; then
   is_ctm=false
 else
   is_ctm=true
+  number_ctm="$(awk -f "$common_dir/esp-query/processOutput_getNumCTM.awk" "$tmp_dir/query_results.txt")"
 fi
 
 # Check for MRT sensors.
@@ -480,8 +483,7 @@ if [ "$cri_en_heat" == 'X' ]; then get_en_heat=false; else get_en_heat=true; fi
 if [ "$cri_en_light" == 'X' ]; then get_en_light=false; else get_en_light=true; fi
 if [ "$cri_en_equip" == 'X' ]; then get_en_equip=false; else get_en_equip=true; fi
 if [ "$cri_en_DHW" == 'X' ]; then
-  # If DHW energy use is required, we need a plant network.
-  # ***HERE***
+  # TODO: If DHW energy use is required, we need a plant network.
   get_en_DHW=false
 else
   get_en_DHW=true
@@ -518,7 +520,6 @@ if ! [ "$cri_aq_CO2_max" == 'X' ]; then
   # If CO2 concentration is required, we need a flow network and a contaminant network.
   if $is_afn && $is_ctm; then
     # Assume that we need only 1 contamimant in network.
-    number_ctm="$(awk -f "$common_dir/esp-query/processOutput_getNumCTM.awk" "$tmp_dir/query_results.txt")"
     if [ "$number_ctm" -ne "1" ]; then
       echo "Error: need 1 contaminant defined in network." >&2
       exit 666
@@ -794,10 +795,11 @@ e
   
   # Only need to activate filtering once; will stay on for the rest of results.
   filter_on=false
+  res_script=""
 
-  # Open CFD library first to avoid unexpected prompts.
+  # Open CFD library to avoid unexpected prompts.
   if $is_CFD; then
-    res_script="
+    res_script="$res_script
 h
 ${cfd_results_tmp}"
     if [ "$CFDdomain_count" -gt 1 ]; then
@@ -805,6 +807,16 @@ ${cfd_results_tmp}"
 1"
     fi
     res_script="$res_script
+-"
+  fi
+
+  # Open mass flow library to avoid unexpected prompts
+  if $is_afn; then
+    res_script="$res_script
+c
+i
+${current_dir}/${mf_results_tmp}
+-
 -"
   fi
 
@@ -833,6 +845,7 @@ b"
 >
 b
 ${tmp_dir_tmp}/resultant_temp.txt
+
 b
 e
 -
@@ -854,18 +867,10 @@ ${num_occ_zones}"
 ${i}"
     done
     res_script="$res_script
-*
-a"
-    if ! $filter_on; then
-      res_script="$res_script
-+
-b"
-      filter_on=true
-    fi
-    res_script="$res_script
 >
 b
 ${tmp_dir_tmp}/energy_delivered.txt
+
 f
 >
 -
@@ -884,24 +889,88 @@ ${num_occ_zones}"
 ${i}"
     done
     res_script="$res_script
-*
-a"
-    if ! $filter_on; then
-      res_script="$res_script
-+
-b"
-      filter_on=true
-    fi
-    res_script="$res_script
 >
 b
 ${tmp_dir_tmp}/casual_gain_distribution.txt
+
 g
 >
 -
 -"
   fi
 
+  # TODO: Get annual DHW energy use.
+
+  # Emissions are post-processing.
+
+  # Get timestep air from ambient.
+  # Because we frequently exceed the selection limit doing this, do one node at a time.
+  if $get_aq_fas; then    
+    for i0_zone in "${array_zone_indices[@]}"; do
+      i1_zone="$((i0_zone + 1))"
+      i1_zone_pad="$(printf "%03d" $i1_zone)"
+      i1_nod="${array_zone_AFNnodNums[i0_zone]}"
+      res_script="$res_script
+c
+i
+>
+b
+${tmp_dir_tmp}/air_from_ambient_z${i1_zone_pad}.txt
+
+j
+b
+d      
+<
+1
+${i1_nod}
+>
+-
+-"
+    done
+  fi
+
+  # Get timestep CO2 concentration for occupied zones.
+  # To enable filtering, do this one zone at a time.
+  if $get_aq_CO2; then
+    for i1_zone in "${array_occ_zoneNums[@]}"; do
+      i0_zone="$((i1_zone - 1))"
+      i1_zone_pad="$(printf "%03d" $i1_zone)"
+      i1_nod="${array_zone_AFNnodNums[i0_zone]}"
+      res_script="$res_script
+c
+i
+*
+a"
+      if $filter_on; then
+        res_script="$res_script
++"
+      fi
+      res_script="$res_script
++
+b
+<
+1
+${i1_zone}
+>
+b
+${tmp_dir_tmp}/CO2_concentration_z${i1_zone_pad}.txt
+
+m
+<
+1
+${i1_nod}
+a
+-
++
+>
+-
+-"
+      filter_on=false
+    done
+  fi
+
+  # * PROCESS RESULTS *
+  # HERE
     
 
   ((iyear++))
