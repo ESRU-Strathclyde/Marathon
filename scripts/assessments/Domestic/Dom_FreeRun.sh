@@ -1,5 +1,22 @@
 #! /bin/bash
 
+containsElement () {
+  local e match="$1"
+  shift
+  for e; do [ "$e" == "$match" ] && return 0; done
+  return 1
+}
+
+removeX () {
+  local __var="$1"
+  local __val="$2"
+  if [ "$__val" == 'X' ]; then
+    eval "$__var"=''
+  else
+    eval "$__var"="'$__val'"
+  fi
+}
+
 # Resilience Assessment script for domestic buildings without mechanical cooling.
 # ESP-r implementation.
 # Version 1.0 of March 2020.
@@ -28,15 +45,18 @@ verbose=false
 preamble_file=""
 do_simulation=true
 do_indra=true
-num_years=50
+num_years=1
 # do_detailed_report=false
 
 # Get paths to call the various other scripts used by this program.
 script_dir="$(dirname "$(readlink -f "$0")")"
 common_dir="$script_dir/../../common"
 
+# Get current directory.
+current_dir="$PWD"
+
 # Parse command line.
-while getopts ":hvf:p:t:s:d:r:j:c:P:UI" opt; do
+while getopts ":hvf:p:t:s:d:r:j:c:P:SI" opt; do
   case "$opt" in
     h) information=true;;
     v) verbose=true;;
@@ -51,7 +71,7 @@ while getopts ":hvf:p:t:s:d:r:j:c:P:UI" opt; do
     j) JSON="$OPTARG";;
     c) comfort_category="$OPTARG";;
     P) preamble_file="$OPTARG";;
-    U) do_simulation=false;;
+    S) do_simulation=false;;
     I) do_indra=false;;
     # R) do_detailed_report=true
     #    detailed_report_final="$OPTARG";;
@@ -63,52 +83,52 @@ while getopts ":hvf:p:t:s:d:r:j:c:P:UI" opt; do
 done
 shift $((OPTIND-1))
 building="$1"
-shift $((OPTIND-1))
-cri_en_heat="$1"
-shift $((OPTIND-1))
-cri_en_light="$1"
-shift $((OPTIND-1))
-cri_en_equip="$1"
-shift $((OPTIND-1))
-cri_en_DHW="$1"
-shift $((OPTIND-1))
-cri_em_CO2="$1"
-shift $((OPTIND-1))
-cri_em_NOX="$1"
-shift $((OPTIND-1))
-cri_em_SOX="$1"
-shift $((OPTIND-1))
-cri_em_O3="$1"
-shift $((OPTIND-1))
-cri_tc_opt_liv_max="$1"
-shift $((OPTIND-1))
-cri_tc_opt_liv_min="$1"
-shift $((OPTIND-1))
-cri_tc_opt_kit_max="$1"
-shift $((OPTIND-1))
-cri_tc_opt_kit_min="$1"
-shift $((OPTIND-1))
-cri_tc_opt_bed_max="$1"
-shift $((OPTIND-1))
-cri_tc_opt_bed_min="$1"
-shift $((OPTIND-1))
-cri_tc_opt_bath_max="$1"
-shift $((OPTIND-1))
-cri_tc_opt_bath_min="$1"
-shift $((OPTIND-1))
-cri_tc_opt_WC_max="$1"
-shift $((OPTIND-1))
-cri_tc_opt_WC_min="$1"
-shift $((OPTIND-1))
-cri_tc_opt_hall_max="$1"
-shift $((OPTIND-1))
-cri_tc_opt_hall_min="$1"
-shift $((OPTIND-1))
-cri_aq_fas_min="$1"
-shift $((OPTIND-1))
-cri_aq_fas_unit="$1"
-shift $((OPTIND-1))
-cri_aq_CO2_max="$1"
+shift
+removeX 'cri_en_heat' "$1"
+shift
+removeX 'cri_en_light' "$1"
+shift
+removeX 'cri_en_equip' "$1"
+shift
+removeX 'cri_en_DHW' "$1"
+shift
+removeX 'cri_em_CO2' "$1"
+shift
+removeX 'cri_em_NOX' "$1"
+shift
+removeX 'cri_em_SOX' "$1"
+shift
+removeX 'cri_em_O3' "$1"
+shift
+removeX 'cri_tc_opt_liv_max' "$1"
+shift
+removeX 'cri_tc_opt_liv_min' "$1"
+shift
+removeX 'cri_tc_opt_kit_max' "$1"
+shift
+removeX 'cri_tc_opt_kit_min' "$1"
+shift
+removeX 'cri_tc_opt_bed_max' "$1"
+shift
+removeX 'cri_tc_opt_bed_min' "$1"
+shift
+removeX 'cri_tc_opt_bath_max' "$1"
+shift
+removeX 'cri_tc_opt_bath_min' "$1"
+shift
+removeX 'cri_tc_opt_WC_max' "$1"
+shift
+removeX 'cri_tc_opt_WC_min' "$1"
+shift
+removeX 'cri_tc_opt_hall_max' "$1"
+shift
+removeX 'cri_tc_opt_hall_min' "$1"
+shift
+removeX 'cri_aq_fas_min' "$1"
+shift
+removeX 'cri_aq_fas_unit' "$1"
+shift
+removeX 'cri_aq_CO2_max' "$1"
 
 if "$information" ; then
   echo
@@ -160,7 +180,7 @@ if "$information" ; then
   echo "                       -P preamble-file"
   echo "                          text in this file will be placed in the report before analysis outcomes"
   echo "                          default: none"
-  echo "                       -U" 
+  echo "                       -S" 
   echo "                          Do not simulate and use existing results libraries"
   echo "                          default: off"
   echo
@@ -217,7 +237,7 @@ if [ ! -d "$tmp_dir" ]; then
     echo "Error: could not create temporary files directory." >&2
     exit 666
   fi
-elif do_simulation; then
+elif $do_simulation; then
   rm -f "$tmp_dir"/*
 fi
 
@@ -431,14 +451,18 @@ if ! [ "X$preset" == "X" ]; then
     fi
     if $is_CFD; then
       cfd_results_preset="$(awk -v mode="$preset_check" -v preset="$preset" -f "$script_dir/get_simPreset_dfrFile.awk" "$building")"
-      if [ "$cfd_results_preset" == "error" ] || [ "X$cfd_results_preset" == "X" ]; then
-        echo "Error: invalid simulation preset - old format." >&2
-        exit 202
-      fi
-      cfd_period_preset="$(awk -v mode="$preset_check" -v preset="$preset" -f "$script_dir/get_simPreset_dfrPeriod.awk" "$building")"
-      if [ "$cfd_period_preset" == "error" ]; then
-        echo "Error: invalid simulation preset - old format." >&2
-        exit 202
+      if [ "$cfd_results_preset" == 'disabled' ]; then
+        is_CFD=false
+      else
+        if [ "$cfd_results_preset" == "error" ] || [ "X$cfd_results_preset" == "X" ]; then
+          echo "Error: invalid simulation preset - old format." >&2
+          exit 202
+        fi
+        cfd_period_preset="$(awk -v mode="$preset_check" -v preset="$preset" -f "$script_dir/get_simPreset_dfrPeriod.awk" "$building")"
+        if [ "$cfd_period_preset" == "error" ]; then
+          echo "Error: invalid simulation preset - old format." >&2
+          exit 202
+        fi
       fi
     fi
     period="$(awk -v mode="$preset_check" -v preset="$preset" -f "$script_dir/get_simPreset_period.awk" "$building")"
@@ -479,33 +503,57 @@ if $is_afn; then mf_results="${results_file}.mfr"; fi
 if $is_CFD; then cfd_results="${results_file}.dfr"; fi
 
 # Scan command line input to determine what metrics we are interested in.
-if [ "$cri_en_heat" == 'X' ]; then get_en_heat=false; else get_en_heat=true; fi
-if [ "$cri_en_light" == 'X' ]; then get_en_light=false; else get_en_light=true; fi
-if [ "$cri_en_equip" == 'X' ]; then get_en_equip=false; else get_en_equip=true; fi
-if [ "$cri_en_DHW" == 'X' ]; then
+if [ "X$cri_en_heat" == 'X' ]; then get_en_heat=false; else get_en_heat=true; fi
+if [ "X$cri_en_light" == 'X' ]; then get_en_light=false; else get_en_light=true; fi
+if [ "X$cri_en_equip" == 'X' ]; then get_en_equip=false; else get_en_equip=true; fi
+if [ "X$cri_en_DHW" == 'X' ]; then
   # TODO: If DHW energy use is required, we need a plant network.
   get_en_DHW=false
 else
   get_en_DHW=true
 fi
-if [ "$cri_em_CO2" == 'X' ]; then get_em_CO2=false; else get_em_CO2=true; fi
-if [ "$cri_em_NOX" == 'X' ]; then get_em_NOX=false; else get_em_NOX=true; fi
-if [ "$cri_em_SOX" == 'X' ]; then get_em_SOX=false; else get_em_SOX=true; fi
-if [ "$cri_em_O3" == 'X' ]; then get_em_O3=false; else get_em_O3=true; fi
+if [ "X$cri_em_CO2" == 'X' ]; then get_em_CO2=false; else get_em_CO2=true; fi
+if [ "X$cri_em_NOX" == 'X' ]; then get_em_NOX=false; else get_em_NOX=true; fi
+if [ "X$cri_em_SOX" == 'X' ]; then get_em_SOX=false; else get_em_SOX=true; fi
+if [ "X$cri_em_O3" == 'X' ]; then get_em_O3=false; else get_em_O3=true; fi
 get_tc_opt=false
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_liv_max" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_liv_min" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_kit_max" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_kit_min" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_bed_max" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_bed_min" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_bath_max" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_bath_min" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_WC_max" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_WC_min" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_hall_max" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! $get_tc_opt; then if ! [ "$cri_tc_opt_hall_min" == 'X' ]; then get_tc_opt=true; fi; fi
-if ! [ "$cri_aq_fas_min" == 'X' ]; then
+if ! [ "X$cri_tc_opt_liv_max" == 'X' ] || ! [ "X$cri_tc_opt_liv_min" == 'X' ]; then 
+  get_tc_opt=true
+  get_tc_opt_liv=true
+else
+  get_tc_opt_liv=false
+fi
+if ! [ "X$cri_tc_opt_kit_max" == 'X' ] || ! [ "X$cri_tc_opt_kit_min" == 'X' ]; then 
+  get_tc_opt=true
+  get_tc_opt_kit=true
+else
+  get_tc_opt_kit=false
+fi
+if ! [ "X$cri_tc_opt_bed_max" == 'X' ] || ! [ "X$cri_tc_opt_bed_min" == 'X' ]; then 
+  get_tc_opt=true
+  get_tc_opt_bed=true
+else
+  get_tc_opt_bed=false
+fi
+if ! [ "X$cri_tc_opt_bath_max" == 'X' ] || ! [ "X$cri_tc_opt_bath_min" == 'X' ]; then 
+  get_tc_opt=true
+  get_tc_opt_bath=true
+else
+  get_tc_opt_bath=false
+fi
+if ! [ "X$cri_tc_opt_WC_max" == 'X' ] || ! [ "X$cri_tc_opt_WC_min" == 'X' ]; then 
+  get_tc_opt=true
+  get_tc_opt_WC=true
+else
+  get_tc_opt_WC=false
+fi
+if ! [ "X$cri_tc_opt_hall_max" == 'X' ] || ! [ "X$cri_tc_opt_hall_min" == 'X' ]; then 
+  get_tc_opt=true
+  get_tc_opt_hall=true
+else
+  get_tc_opt_hall=false
+fi
+if ! [ "X$cri_aq_fas_min" == 'X' ]; then
   # If fresh air supply is required, we need a flow network.
   if $is_afn; then
     get_aq_fas=true
@@ -516,7 +564,7 @@ if ! [ "$cri_aq_fas_min" == 'X' ]; then
 else
   get_aq_fas=false
 fi
-if ! [ "$cri_aq_CO2_max" == 'X' ]; then
+if ! [ "X$cri_aq_CO2_max" == 'X' ]; then
   # If CO2 concentration is required, we need a flow network and a contaminant network.
   if $is_afn && $is_ctm; then
     # Assume that we need only 1 contamimant in network.
@@ -532,6 +580,61 @@ if ! [ "$cri_aq_CO2_max" == 'X' ]; then
 else
   get_aq_CO2=false
 fi
+
+# Debug.
+echo "get_en_heat $get_en_heat" > "$tmp_dir/gets.trace"
+echo "get_en_light $get_en_light" >> "$tmp_dir/gets.trace"
+echo "get_en_equip $get_en_equip" >> "$tmp_dir/gets.trace"
+echo "get_en_DHW $get_en_DHW" >> "$tmp_dir/gets.trace"
+echo "get_em_CO2 $get_em_CO2" >> "$tmp_dir/gets.trace"
+echo "get_em_NOX $get_em_NOX" >> "$tmp_dir/gets.trace"
+echo "get_em_SOX $get_em_SOX" >> "$tmp_dir/gets.trace"
+echo "get_em_O3 $get_em_O3" >> "$tmp_dir/gets.trace"
+echo "get_tc_opt $get_tc_opt" >> "$tmp_dir/gets.trace"
+echo "get_aq_fas $get_aq_fas" >> "$tmp_dir/gets.trace"
+echo "get_aq_CO2 $get_aq_CO2" >> "$tmp_dir/gets.trace"
+
+# Scan zone names to find ...
+liv=0
+kit=0
+bed=0
+bath=0
+WC=0
+hall=0
+for i0_zone in "${array_zone_indices[@]}"; do
+  i1_zone="$((i0_zone+1))"
+  zoneName="${array_zone_names[i0_zone]}"
+  # living room(s)
+  if [[ "$zoneName" == *liv* ]]; then
+    array_liv_zoneNums[liv]="$i1_zone"
+    ((liv++))
+  fi
+  # kitchen(s)
+  if [[ "$zoneName" == *kit* ]]; then
+    array_kit_zoneNums[kit]="$i1_zone"
+    ((kit++))
+  fi
+  # bedroom(s)
+  if [[ "$zoneName" == *bed* ]]; then
+    array_bed_zoneNums[bed]="$i1_zone"
+    ((bed++))
+  fi
+  # bathroom(s)
+  if [[ "$zoneName" == *bath* ]]; then
+    array_bath_zoneNums[bath]="$i1_zone"
+    ((bath++))
+  fi
+  # WC(s)
+  if [[ "$zoneName" == *WC* ]]; then
+    array_WC_zoneNums[WC]="$i1_zone"
+    ((WC++))
+  fi
+  # hall(s)
+  if [[ "$zoneName" == *hall* ]]; then
+    array_hall_zoneNums[hall]="$i1_zone"
+    ((hall++))
+  fi
+done
 
 
 
@@ -582,46 +685,49 @@ fi
 # Update simulation year in cfg file.
 sed -i -e 's/\*year *[0-9]*/*year '"$year"'/' "$building_tmp"
 
-# Remove any files that might cause unexpected questions from ESP-r.
-# Suppress output to prevent chatter.
-rm -f "$sim_results_tmp" > /dev/null
-if $is_afn; then rm -f "$mf_results_tmp" > /dev/null; fi
-if $is_CFD; then rm -f "$cfd_results_tmp" > /dev/null; fi
-rm -f "$building_dir_tmp"/ACC-actions_*.rec > /dev/null
-rm -f "$building_dir_tmp"/cfd3dascii_* > /dev/null
 
- 
+
 
 
 # *** START OF SIMULATION LOOP ***
 
+# Update progress file.
+echo '4' > "$tmp_dir/progress.txt"
+
 # Loop for the prescribed number of years.
 iyear=1
-while "$iyear" <= "$num_years"; do
+while [ "$iyear" -le "$num_years" ]; do
 
   # * SIMULATE *
   if "$do_simulation"; then
 
-    # Update progress file.
-    echo '4' > "$tmp_dir/progress.txt"
+    # Remove any files that might cause unexpected questions from ESP-r.
+    # Suppress output to prevent chatter.
+    rm -f "$sim_results_tmp" > /dev/null
+    if $is_afn; then rm -f "$mf_results_tmp" > /dev/null; fi
+    if $is_CFD; then rm -f "$cfd_results_tmp" > /dev/null; fi
+    rm -f "$building_dir_tmp"/ACC-actions_*.rec > /dev/null
+    rm -f "$building_dir_tmp"/cfd3dascii_* > /dev/null
 
     # if ! [ "X$up_one" == "X" ]; then
     #   cd ..
     # fi
 
     # Retrieve weather data from indra.
-    python3 "$common_dir/SyntheticWeather/indra.py" --train 0 --station_code 'ra' --path_file_in "$tmp_dir_tmp/weather_base.txt" --path_file_out "$weather_base_abs.txt" --file_type 'espr' --store_path "$tmp_dir_tmp/indra" >> "$tmp_dir_tmp/indra.out"
-    if [ $? -ne 0 ]; then  
-      echo "Error: failed to retrieve weather data from indra."
-      exit 666
-    fi
+    if $do_indra; then
+      python3 "$common_dir/SyntheticWeather/indra.py" --train 0 --station_code 'ra' --path_file_in "$tmp_dir_tmp/weather_base.txt" --path_file_out "$weather_base_abs.txt" --file_type 'espr' --store_path "$tmp_dir_tmp/indra" >> "$tmp_dir_tmp/indra.out"
+      if [ $? -ne 0 ]; then  
+        echo "Error: failed to retrieve weather data from indra."
+        exit 666
+      fi
 
-    # Convert ASCII weather data to binary.
-    rm "$weather_base_abs"
-    clm -file "$weather_base_abs" -act asci2bin silent "$weather_base_abs.txt"
-    if [ $? -ne 0 ]; then  
-      echo "Error: failed to convert weather data to binary."
-      exit 666
+      # Convert ASCII weather data to binary.
+      rm "$weather_base_abs"
+      clm -file "$weather_base_abs" -act asci2bin silent "$weather_base_abs.txt"
+      if [ $? -ne 0 ]; then  
+        echo "Error: failed to convert weather data to binary."
+        exit 666
+      fi
     fi
 
     # Run ESP-r simulation.
@@ -735,7 +841,7 @@ d
 c
 >
 b
-${tmp_dir_tmp}/occupied_hours
+${tmp_dir_tmp}/occupied_hours.txt
 j
 e
 -
@@ -747,13 +853,16 @@ e
 ~
 
   # Check error code and existence of output.
-  if [ "$?" -ne 0 ] || ! [ -f "$tmp_dir_tmp/occupied_hours" ]; then
+  if [ "$?" -ne 0 ] || ! [ -f "$tmp_dir_tmp/occupied_hours.txt" ]; then
     echo "Error: occupancy results extraction failed." >&2
     exit 105
   fi
 
   # Extract data from res output.
-  ocup="$(awk -f "$script_dir/get_occupiedHoursLatex.awk" "$tmp_dir_tmp/occupied_hours")"
+  ocup="$(awk -f "$script_dir/get_occupiedHours.awk" "$tmp_dir_tmp/occupied_hours.txt")"
+
+  # Debug.
+  echo "$ocup" > "$tmp_dir_tmp/ocup.trace"
 
   # Check data for occupancy.
   count=0
@@ -763,23 +872,22 @@ e
   for a in $ocup; do
     ((count++))
     if [ $count -eq 1 ]; then
-      zone_num="${a:0:-1}"
+      zone_num="${a}"
       zone_ind="$((zone_num - 1))"
       if $verbose; then echo " Checking zone $zone_num."; fi
-    elif [ $count -eq 4 ]; then 
+    elif [ $count -eq 2 ]; then 
       if $verbose; then echo " Occupied hours = $a"; fi
       # if [ "${a/.}" -gt 0 ] && [ "${array_MRT_sensors[ind]}" -gt 0 ]; then
       if [ "${a/.}" -gt 0 ]; then
         if $verbose; then echo " Occupied."; fi
         if ! $is_occ; then is_occ=true; fi
         array_is_occ[zone_ind]=true
-        array_occ_zoneNums[num_occ_zones]=zone_num
+        array_occ_zoneNums[num_occ_zones]=$zone_num
         ((num_occ_zones++))
       else
         if $verbose; then echo " Not occupied."; fi
         array_is_occ[zone_ind]=false
       fi
-    elif [ $count -eq 7 ]; then 
       count=0
       ((ind++))
     fi
@@ -846,6 +954,9 @@ b"
 b
 ${tmp_dir_tmp}/resultant_temp.txt
 
+a
+a
+-
 b
 e
 -
@@ -855,18 +966,15 @@ e
 -"
   fi
 
-  # Get energy delivered for all occupied zones.
+  # Get energy delivered for zones.
+  # Include unnocupied zones in this; this gets ESP-r to work out
+  # per m2 for us.
   if $get_en_heat; then
     res_script="$res_script
 d
 4
-<
-${num_occ_zones}"
-    for i in "${array_occ_zoneNums[@]}"; do
-      res_script="$res_script
-${i}"
-    done
-    res_script="$res_script
+*
+-
 >
 b
 ${tmp_dir_tmp}/energy_delivered.txt
@@ -969,9 +1077,92 @@ a
     done
   fi
 
+  res_script="$res_script
+-
+"
+
+  echo "$res_script" >> "$tmp_dir_tmp/res.script"
+
+  # Run res.
+  res -mode script -file "$sim_results_tmp" >> "$tmp_dir_tmp/res.out" <<~
+${res_script}
+~
+
   # * PROCESS RESULTS *
-  # HERE
-    
+
+  # Assemble column lists for each zone type.
+  # First column is time, second column is outdoor dry bulb temperature.
+  i1_col=2
+  for i0 in "${array_zone_indices[@]}"; do      
+    if ${array_is_occ[i0]}; then
+      ((i1_col++))
+      i1="$((i0+1))"
+      if containsElement "$i1" "${array_liv_zoneNums[@]}"; then
+        liv_cols="${liv_cols}${i1_col},"
+      fi
+      if containsElement "$i1" "${array_kit_zoneNums[@]}"; then
+        kit_cols="${kit_cols}${i1_col},"
+      fi
+      if containsElement "$i1" "${array_bed_zoneNums[@]}"; then
+        bed_cols="${bed_cols}${i1_col},"
+      fi
+      if containsElement "$i1" "${array_bath_zoneNums[@]}"; then
+        bath_cols="${bath_cols}${i1_col},"
+      fi
+      if containsElement "$i1" "${array_WC_zoneNums[@]}"; then
+        WC_cols="${WC_cols}${i1_col},"
+      fi
+      if containsElement "$i1" "${array_hall_zoneNums[@]}"; then
+        hall_cols="${hall_cols}${i1_col},"
+      fi
+    fi
+  done
+
+  # Get operative temperature deviation.
+  if $get_tc_opt_liv && [ "${#array_liv_zoneNums[@]}" -gt 0 ]; then
+    if [ "$cri_tc_opt_liv_max" == 'CIBSE TM52' ]; then
+      opt_deviation_liv="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52.awk" -v max='liv' -v min="$cri_tc_opt_liv_min" -v cols="$liv_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+    else
+      opt_deviation_liv="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_liv_max" -v min="$cri_tc_opt_liv_min" -v cols="$liv_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+    fi
+  fi
+  if $get_tc_opt_kit && [ "${#array_kit_zoneNums[@]}" -gt 0 ]; then
+    opt_deviation_kit="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_kit_max" -v min="$cri_tc_opt_kit_min" -v cols="$kit_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+  fi
+  if $get_tc_opt_bed && [ "${#array_bed_zoneNums[@]}" -gt 0 ]; then
+    opt_deviation_bed="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_bed_max" -v min="$cri_tc_opt_bed_min" -v cols="$bed_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+  fi
+  if $get_tc_opt_bath && [ "${#array_bath_zoneNums[@]}" -gt 0 ]; then
+    opt_deviation_bath="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_bath_max" -v min="$cri_tc_opt_bath_min" -v cols="$bath_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+  fi
+  if $get_tc_opt_WC && [ "${#array_WC_zoneNums[@]}" -gt 0 ]; then
+    opt_deviation_WC="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_WC_max" -v min="$cri_tc_opt_WC_min" -v cols="$WC_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+  fi
+  if $get_tc_opt_hall && [ "${#array_hall_zoneNums[@]}" -gt 0 ]; then
+    opt_deviation_hall="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_hall_max" -v min="$cri_tc_opt_hall_min" -v cols="$hall_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+  fi
+
+  # Debug.
+  echo "$opt_deviation_liv" > "$tmp_dir_tmp/opt_deviation_liv.trace"
+  echo "$opt_deviation_kit" > "$tmp_dir_tmp/opt_deviation_kit.trace"
+  echo "$opt_deviation_bed" > "$tmp_dir_tmp/opt_deviation_bed.trace"
+  echo "$opt_deviation_bath" > "$tmp_dir_tmp/opt_deviation_bath.trace"
+  echo "$opt_deviation_WC" > "$tmp_dir_tmp/opt_deviation_WC.trace"
+  echo "$opt_deviation_hall" > "$tmp_dir_tmp/opt_deviation_hall.trace"
+
+  # Get heating energy use deviation.
+  en_heat="$(awk -f "$script_dir/get_energyDelivered.awk" "$tmp_dir_tmp/energy_delivered.txt")"
+  heat_deviation="$(echo "$en_heat" | awk -f "$script_dir/get_deviation_value.awk" -v max="$cri_en_heat")"
+
+  # TODO: get lighting, equipment, and DHW energy use.
+
+  # TODO: get emissions deviation.
+
+  # 
+
+
+
+
 
   ((iyear++))
 
