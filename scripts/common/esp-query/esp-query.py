@@ -123,15 +123,19 @@ ls_outputs=['model_name','number_zones','CFD_domains','zone_setpoints','model_de
             'afn_zone_nodes','afn_zon_nod_nums','zone_control','CFD_contaminants','CFD_domain_files','MRT_sensor_names',
 #            20          21              22              23            24              25                   26
             'tdfa_file','tdfa_timestep','tdfa_startday','tdfa_endday','tdfa_entities','uncertainties_file','number_presets',
-#            27
-            'weather_file']
+#            27            28          29                 30             31
+            'weather_file','QA_report','total_floor_area','total_volume','zone_volumes']
 # Prerequisites.
-#            0  1  2      3    4  5   6   7   8  9  10  11 12 13   14
-lli_needs= [ [],[],[1,18],[16],[],[1],[1],[1],[],[],[1],[],[],[12],[11],
-#            15        16 17     18  19    20 21   22   23   24   25 26
-             [11,14,1],[],[1,18],[1],[1,6],[],[20],[20],[20],[20],[],[],
-#            27              
-             [] ]
+#            0  1  2      3    4  5   6   
+lli_needs= [ [],[],[1,18],[16],[],[1],[1],
+#            7   8  9  10  11 12 13  
+             [1],[],[],[1],[],[],[12],
+#            14   15        16 17     18  19    
+             [11],[11,14,1],[],[1,18],[1],[1,6],
+#            20 21   22   23   24   25 26
+             [],[20],[20],[20],[20],[],[],
+#            27 28 29   30   31
+             [],[],[28],[28],[28] ]
 
 # Argument parser and help text.
 parser=argparse.ArgumentParser(description='Script to query an ESP-r model for various data.\n'
@@ -176,7 +180,11 @@ parser.add_argument('OUTPUTS',
                          ' tdfa_entities      = number of entities in tdfa file (blank if no tdfa file)\n'
                          ' uncertainties_file = uncertainty file referenced in cfg file (blank if none)\n'
                          ' number_presets     = number of simulation presets in cfg file\n'
-                         ' weather_file       = weather file referenced in the cfg file\n')
+                         ' weather_file       = weather file referenced in the cfg file\n'
+                         ' QA_report          = file name of the QA report (blank if none defined)\n'
+                         ' total_floor_area   = total floor area of all zones in model (blank if no QA report)\n'
+                         ' total_volume       = total volume of all zones in model (blank if no QA report)\n'
+                         ' zone_volumes       = comma separated list of zone volumes (blank if no QA report)\n')
 
 # Parse command line.
 args=parser.parse_args()
@@ -757,11 +765,70 @@ for s_line in f_cfg:
             ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+'/home/esru/esru_cowie/climate/'+ls_line[1]
             lb_outputs[i_ind]=False
 
+    # Get QA file.
+    i_ind=28
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*contents':
+            s_QA=s_cfgPath+'/'+ls_line[1]
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line[1]
+            lb_outputs[i_ind]=False
 
+    # Get total floor area.
+    i_ind=29
+    if lb_outputs[i_ind]:
+        if not lb_outputs[lli_needs[i_ind][0]]:
+            f_QA=open(s_QA,'r')
+            b=False
+            for s_line2 in f_QA:
+                s_line2=s_line2.strip()
+                if s_line2=='Name         m^3   | No. Opaque  Transp  ~Floor':
+                    b=True
+                elif b:
+                    ls_line2=s_line2.split()
+                    if ls_line2[0]=='all':
+                        ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line2[5]
+                        lb_outputs[i_ind]=False
+                        break
+            f_QA.close()
 
-            
+    # Get total volume.
+    i_ind=30
+    if lb_outputs[i_ind]:
+        if not lb_outputs[lli_needs[i_ind][0]]:
+            f_QA=open(s_QA,'r')
+            b=False
+            for s_line2 in f_QA:
+                s_line2=s_line2.strip()
+                if s_line2=='Name         m^3   | No. Opaque  Transp  ~Floor':
+                    b=True
+                elif b:
+                    ls_line2=s_line2.split()
+                    if ls_line2[0]=='all':
+                        ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line2[1]
+                        lb_outputs[i_ind]=False
+                        break            
+            f_QA.close()
 
-            
+    # Get zone volumes.
+    i_ind=31
+    if lb_outputs[i_ind]:
+        if not lb_outputs[lli_needs[i_ind][0]]:
+            f_QA=open(s_QA,'r')
+            b=False
+            ls=[]
+            for s_line2 in f_QA:
+                s_line2=s_line2.strip()
+                if s_line2=='Name         m^3   | No. Opaque  Transp  ~Floor':
+                    b=True
+                elif b:
+                    ls_line2=s_line2.split()
+                    if ls_line2[0]=='all':
+                        ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+','.join(ls)
+                        lb_outputs[i_ind]=False
+                        break
+                    else:
+                        ls.append(ls_line2[2])            
+            f_QA.close()
 
 f_cfg.close()
 
@@ -791,6 +858,10 @@ addBlank(23)
 addBlank(24)
 addBlank(25)
 addBlank(26,s_entry='0')
+addBlank(28)
+addBlank(29)
+addBlank(30)
+addBlank(31)
 
 # If any booleans remain, something has not been found - throw an error.
 if True in lb_outputs:

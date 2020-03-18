@@ -17,7 +17,7 @@ BEGIN {
 {
   if (substr($1,1,1)=="#") {next}
   print $1;
-  j=0;
+  j=1;
   for (i=2;i<=NF;i++) {
     if (cols) {
       j++;
@@ -27,7 +27,6 @@ BEGIN {
         continue
       }
     }
-
     if ($i ~ /^-?[0-9]+\.?[0-9]*$/) {
       if (max) {
         dif=$i-max;
