@@ -123,8 +123,12 @@ ls_outputs=['model_name','number_zones','CFD_domains','zone_setpoints','model_de
             'afn_zone_nodes','afn_zon_nod_nums','zone_control','CFD_contaminants','CFD_domain_files','MRT_sensor_names',
 #            20          21              22              23            24              25                   26
             'tdfa_file','tdfa_timestep','tdfa_startday','tdfa_endday','tdfa_entities','uncertainties_file','number_presets',
-#            27            28          29                 30             31
-            'weather_file','QA_report','total_floor_area','total_volume','zone_volumes']
+#            27             28          29                 30             31             32                33
+            'weather_file','QA_report','total_floor_area','total_volume','zone_volumes','FMI_config_file','FMU_names',
+#            34               35               36               37                38                 39
+            'number_toilets','number_urinals','number_showers','number_printers','number_photocopy','is_building',
+#            40              41                 42
+            'plant_network','plant_components','plant_comp_names']
 # Prerequisites.
 #            0  1  2      3    4  5   6   
 lli_needs= [ [],[],[1,18],[16],[],[1],[1],
@@ -134,8 +138,12 @@ lli_needs= [ [],[],[1,18],[16],[],[1],[1],
              [11],[11,14,1],[],[1,18],[1],[1,6],
 #            20 21   22   23   24   25 26
              [],[20],[20],[20],[20],[],[],
-#            27 28 29   30   31
-             [],[],[28],[28],[28] ]
+#            27 28 29   30   31   32 33
+             [],[],[28],[28],[28],[],[32],
+#            34  35  36  37  38  39
+             [1],[1],[1],[1],[1],[],
+#            40 41   42
+             [],[40],[40] ]
 
 # Argument parser and help text.
 parser=argparse.ArgumentParser(description='Script to query an ESP-r model for various data.\n'
@@ -168,10 +176,10 @@ parser.add_argument('OUTPUTS',
                          ' rad_viewpoints     = comma seperated list of radiance viewpoint names for the first scene\n'
                          ' rad_scene          = name of the first radiance scene\n'
                          ' zone_win_surfs     = for each zone, comma separated list of window surface numbers\n'
-                         ' afn_network        = name of the air flow network (blank if none defined)\n'
+                         ' afn_network        = name of the air flow network file (blank if none defined)\n'
                          ' afn_zone_nodes     = comma separated list of afn node names representing zones (blank if no network defined, zone listed as 0 if not linked to a node)\n'
                          ' afn_zon_nod_nums   = comma separated list of afn node indices representing zones (blank if no network defined, zone listed as 0 if not linked to a node)\n'
-                         ' ctm_network        = name of the contaminant network (blank if none defined)\n'
+                         ' ctm_network        = name of the contaminant network file (blank if none defined)\n'
                          ' number_ctm         = number of contaminants in network (blank if no network defined)\n'
                          ' tdfa_file          = tdfa file referenced in cfg file (blank if none)\n'
                          ' tdfa_timestep      = time steps per hour in the tdfa file (blank if no tdfa file)\n'
@@ -184,7 +192,18 @@ parser.add_argument('OUTPUTS',
                          ' QA_report          = file name of the QA report (blank if none defined)\n'
                          ' total_floor_area   = total floor area of all zones in model (blank if no QA report)\n'
                          ' total_volume       = total volume of all zones in model (blank if no QA report)\n'
-                         ' zone_volumes       = comma separated list of zone volumes (blank if no QA report)\n')
+                         ' zone_volumes       = comma separated list of zone volumes (blank if no QA report)\n'
+                         ' FMI_config_file    = FMI configuration file referenced in the cfg file (blank if none defined)\n'
+                         ' FMU_names          = comma separated list of FMUs referenced in the FMI file (blank if none defined)\n'
+                         ' number_toilets     = comma separated list of the number of visual objects with "toilet" in the name in each zone\n'
+                         ' number_urinals     = comma separated list of the number of visual objects with "urinal" in the name in each zone\n'
+                         ' number_showers     = comma separated list of the number of visual objects with "shower" in the name in each zone\n'
+                         ' number_printers    = comma separated list of the number of visual objects with "printer" in the name in each zone\n'
+                         ' number_photocopy   = comma separated list of the number of visual objects with "photocopy" in the name in each zone\n'
+                         ' is_building        = flag indicating if there is (1) or is not (0) a building component to the model (i.e. not plant only)\n'
+                         ' plant_network      = name of the plant network file (blank if none defined)\n'
+                         ' plant_components   = comma separated list of plant component numbers\n'
+                         ' plant_comp_names   = comma separated list of plant component names\n')
 
 # Parse command line.
 args=parser.parse_args()
@@ -233,6 +252,8 @@ b_ctl=False
 b_vwf=False
 b_cfd=False
 i_afn=0
+i_plant=0
+i_pcomp=0
 i_numZonesDone=0
 for s_line in f_cfg:
     s_line=s_line.strip()
@@ -762,7 +783,7 @@ for s_line in f_cfg:
             lb_outputs[i_ind]=False
         elif ls_line[0]=='*stdclm':
             # TODO: this path is currently hardcoded
-            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+'/home/esru/esru_cowie/climate/'+ls_line[1]
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+'/home/esru-sim-server/esru_cowie/climate/'+ls_line[1]
             lb_outputs[i_ind]=False
 
     # Get QA file.
@@ -830,6 +851,249 @@ for s_line in f_cfg:
                         ls.append(ls_line2[2])            
             f_QA.close()
 
+    # Get FMI config file.
+    i_ind=32
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*FMI':
+            s_FMI=s_cfgPath+'/'+ls_line[1]
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line[1]
+            lb_outputs[i_ind]=False
+
+    # Get FMU names.
+    i_ind=33
+    if lb_outputs[i_ind]:
+        if not lb_outputs[lli_needs[i_ind][0]]:
+            f_FMI=open(s_FMI,'r')
+            b_first=True
+            for s_line2 in f_FMI:
+                ls_line2=s_line2.strip().split()
+                if ls_line2[0]=='*FileName':
+                    if b_first:
+                        ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line2[1]
+                        b_first=False
+                    else:
+                        ls_outputVals[i_ind]=ls_outputs[i_ind]+','+ls_line2[1]
+            lb_outputs[i_ind]=False
+            f_FMI.close()
+
+    # Get number of toilets in each zone.
+    # Assumes that we already have number of zones.
+    i_ind=34
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*zon':
+            b_toilet=True
+
+        elif b_toilet and ls_line[0]=='*geo':
+            f_toilet=open(s_cfgPath+'/'+ls_line[1],'r')
+            i_toilet=0
+            for s_line2 in f_toilet:
+                ls_line2=s_line2.strip().split(',')
+                if ls_line2[0]=='*vobject':
+                    if 'toilet' in ls_line2[1]: i_toilet+=1
+            f_toilet.close()
+            s=str(i_toilet)
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_toilet=False
+
+        elif b_toilet and ls_line[0]=='*zend':
+            s='0'
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_toilet=False
+
+    # Get number of urinals in each zone.
+    # Assumes that we already have number of zones.
+    i_ind=35
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*zon':
+            b_urinal=True
+            
+        elif b_urinal and ls_line[0]=='*geo':
+            f_urinal=open(s_cfgPath+'/'+ls_line[1],'r')
+            i_urinal=0
+            for s_line2 in f_urinal:
+                ls_line2=s_line2.strip().split(',')
+                if ls_line2[0]=='*vobject':
+                    if 'urinal' in ls_line2[1]: i_urinal+=1
+            f_urinal.close()
+            s=str(i_urinal)
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_urinal=False
+
+        elif b_urinal and ls_line[0]=='*zend':
+            s='0'
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_urinal=False
+
+    # Get number of showers in each zone.
+    # Assumes that we already have number of zones.
+    i_ind=36
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*zon':
+            b_shower=True
+            
+        elif b_shower and ls_line[0]=='*geo':
+            f_shower=open(s_cfgPath+'/'+ls_line[1],'r')
+            i_shower=0
+            for s_line2 in f_shower:
+                ls_line2=s_line2.strip().split(',')
+                if ls_line2[0]=='*vobject':
+                    if 'shower' in ls_line2[1]: i_shower+=1
+            f_shower.close()
+            s=str(i_shower)
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_shower=False
+
+        elif b_shower and ls_line[0]=='*zend':
+            s='0'
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_shower=False
+
+    # Get number of printers in each zone.
+    # Assumes that we already have number of zones.
+    i_ind=37
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*zon':
+            b_printer=True
+            
+        elif b_printer and ls_line[0]=='*geo':
+            f_printer=open(s_cfgPath+'/'+ls_line[1],'r')
+            i_printer=0
+            for s_line2 in f_printer:
+                ls_line2=s_line2.strip().split(',')
+                if ls_line2[0]=='*vobject':
+                    if 'printer' in ls_line2[1]: i_printer+=1
+            f_printer.close()
+            s=str(i_printer)
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_printer=False
+
+        elif b_printer and ls_line[0]=='*zend':
+            s='0'
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_printer=False
+
+    # Get number of photocopiers in each zone.
+    # Assumes that we already have number of zones.
+    i_ind=38
+    if lb_outputs[i_ind]:
+        if ls_line[0]=='*zon':
+            b_photocopy=True
+            
+        elif b_photocopy and ls_line[0]=='*geo':
+            f_photocopy=open(s_cfgPath+'/'+ls_line[1],'r')
+            i_photocopy=0
+            for s_line2 in f_photocopy:
+                ls_line2=s_line2.strip().split(',')
+                if ls_line2[0]=='*vobject':
+                    if 'photocopy' in ls_line2[1]: i_photocopy+=1
+            f_photocopy.close()
+            s=str(i_photocopy)
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_photocopy=False
+
+        elif b_photocopy and ls_line[0]=='*zend':
+            s='0'
+            if i_numZonesDone==1:
+                ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s
+            else:
+                ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+s
+            if i_numZonesDone==int(ls_outputVals[lli_needs[i_ind][0]].split('=')[1]): lb_outputs[i_ind]=False
+            b_photocopy=False
+
+    # Get building flag.
+    i_ind=39
+    if lb_outputs[i_ind]:
+        if ls_line[0:2]==['*','Building']:
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'=1'
+            lb_outputs[i_ind]=False
+
+    # Get plant network.
+    i_ind=40
+    if lb_outputs[i_ind]:
+        if ls_line[0:2]==['*','Plant']:
+            i_plant=1
+        elif i_plant==1:
+            s_plant=s_cfgPath+'/'+ls_line[0]
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s_plant
+            lb_outputs[i_ind]=False
+            i_plant=0
+
+    # Get plant components names and / or numbers.
+    i_ind=41
+    i_ind2=42
+    if lb_outputs[i_ind] or lb_outputs[i_ind2]:
+        if not lb_outputs[lli_needs[i_ind][0]]:
+            i_pcomp=-3
+            n_pcomp=0
+            b_pcomp=False
+            f_plant=open(s_plant,'r')
+            do_m=True
+            for s_line2 in f_plant:
+                ls_line2=s_line2.strip().split()
+                if s_line2[0]!='#': i_pcomp+=1
+                # print(i_pcomp,s_line2)
+                if do_m and i_pcomp==0:
+                    m_pcomp=int(ls_line2[0])
+                    do_m=False
+                elif ls_line2[0]=='#->':
+                    b_pcomp=True
+                    n_pcomp+=1
+                elif b_pcomp:
+                    b_pcomp=False
+                    if lb_outputs[i_ind]:
+                        if i_pcomp==1:
+                            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line2[1]
+                        else:
+                            ls_outputVals[i_ind]=ls_outputVals[i_ind]+','+ls_line2[1]
+                    if lb_outputs[i_ind2]:
+                        if i_pcomp==1:
+                            ls_outputVals[i_ind2]=ls_outputs[i_ind2]+'='+ls_line2[0]
+                        else:
+                            ls_outputVals[i_ind2]=ls_outputVals[i_ind2]+','+ls_line2[0]
+                    if n_pcomp==m_pcomp:
+                        if lb_outputs[i_ind]: lb_outputs[i_ind]=False
+                        if lb_outputs[i_ind2]: lb_outputs[i_ind2]=False
+                        break
+            f_plant.close()
+
+
+
 f_cfg.close()
 
 # Function to add an entry if an item has not been found.
@@ -862,6 +1126,12 @@ addBlank(28)
 addBlank(29)
 addBlank(30)
 addBlank(31)
+addBlank(32)
+addBlank(33)
+addBlank(39,s_entry='0')
+addBlank(40)
+addBlank(41)
+addBlank(42)
 
 # If any booleans remain, something has not been found - throw an error.
 if True in lb_outputs:

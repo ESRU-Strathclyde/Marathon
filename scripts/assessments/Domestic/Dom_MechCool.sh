@@ -19,7 +19,7 @@ removeX () {
 
 # Resilience Assessment script for domestic buildings without mechanical cooling.
 # ESP-r implementation.
-# Version 1.0 of March 2020.
+# Version 1.0 of June 2020.
 
 # Error codes:
 # 101: Problem with command line options.
@@ -233,7 +233,7 @@ fi
 
 
 
-if $verbose; then echo "***** DOMESTIC (FREE RUNNING) RA START"; fi
+if $verbose; then echo "***** DOMESTIC (MECHANICALLY COOLED) RA START"; fi
 
 # Test if tmp directory exists.
 if [ ! -d "$tmp_dir" ]; then
@@ -496,8 +496,6 @@ if ! [ "X$preset" == "X" ]; then
 
 # But is true of the CFD library.
   if $is_CFD; then cfd_results_preset=~/"$(basename "$cfd_results_preset")"; fi
-
-# Also, if there is a simulation preset with 
 fi
 
 # Check for uncertainties definitions.
@@ -701,11 +699,6 @@ if $do_indra; then
 fi
 
 
-
-
-
-# *** START OF SIMULATION LOOP ***
-
 # Set up paths.
 if [ "X$up_one" == "X" ]; then
   building_tmp="$building"
@@ -726,6 +719,12 @@ fi
 
 # Update simulation year in cfg file.
 sed -i -e 's/\*year *[0-9]*/*year '"$year"'/' "$building_tmp"
+
+
+
+
+
+# *** START OF SIMULATION LOOP ***
 
 # Update progress file.
 echo '4' > "$tmp_dir/progress.txt"
@@ -1082,6 +1081,42 @@ ${i1_nod}
     done
   fi
 
+  # Get timestep total air in.
+  # Total air in must equal total air out, so this is equivalent to 
+  # total extract (not necessarily to ambient).
+  # Because we frequently exceed the selection limit doing this,
+  # do one node at a time.
+  # Always get l/s even if we need ACH, because we need to
+  # convert to ACH based on total volume which ESP-r doesn't do.
+  if $get_aq_fas; then    
+    for i0_zone in "${array_zone_indices[@]}"; do
+      i1_zone="$((i0_zone + 1))"
+      i1_zone_pad="$(printf "%03d" $i1_zone)"
+      i1_nod="${array_zone_AFNnodNums[i0_zone]}"
+      if [ "$i1_nod" -gt 0 ]; then
+        res_script="$res_script
+c
+i
+*
+a
+>
+b
+${tmp_dir_tmp}/air_total_extract_z${i1_zone_pad}.txt
+
+j
+b
+c      
+<
+1
+${i1_nod}
+!
+>
+-
+-"
+      fi
+    done
+  fi
+
   # Get timestep CO2 concentration for occupied zones.
   # To enable filtering, do this one zone at a time.
   if $get_aq_CO2; then
@@ -1195,7 +1230,7 @@ $(echo "$en_heat_deviation" | awk -f "$script_dir/check_deviation_value.awk" -v 
   # Assemble description strings for each zone.
   if $get_tc_opt_liv && [ "${#array_liv_zoneNums[@]}" -gt 0 ]; then
     if [ "$cri_tc_opt_liv_max" == 'CIBSE TM52' ]; then
-      opt_deviation_liv="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_freeRun.awk" -v max='liv' -v min="$cri_tc_opt_liv_min" -v cols="$i3_liv_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+      opt_deviation_liv="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_mechCool.awk" -v max='liv' -v min="$cri_tc_opt_liv_min" -v cols="$i3_liv_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     else
       opt_deviation_liv="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_liv_max" -v min="$cri_tc_opt_liv_min" -v cols="$i3_liv_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     fi
@@ -1224,7 +1259,7 @@ $(echo "$opt_deviation_liv" | awk -f "$script_dir/check_deviation_timeStep.awk" 
   fi
   if $get_tc_opt_kit && [ "${#array_kit_zoneNums[@]}" -gt 0 ]; then
     if [ "$cri_tc_opt_kit_max" == 'CIBSE TM52' ]; then
-      opt_deviation_kit="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_freeRun.awk" -v max='kit' -v min="$cri_tc_opt_kit_min" -v cols="$i3_kit_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+      opt_deviation_kit="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_mechCool.awk" -v max='kit' -v min="$cri_tc_opt_kit_min" -v cols="$i3_kit_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     else
       opt_deviation_kit="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_kit_max" -v min="$cri_tc_opt_kit_min" -v cols="$i3_kit_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     fi
@@ -1253,7 +1288,7 @@ $(echo "$opt_deviation_kit" | awk -f "$script_dir/check_deviation_timeStep.awk" 
   fi
   if $get_tc_opt_bed && [ "${#array_bed_zoneNums[@]}" -gt 0 ]; then
     if [ "$cri_tc_opt_bed_max" == 'CIBSE TM52' ]; then
-      opt_deviation_bed="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_freeRun.awk" -v max='bed' -v min="$cri_tc_opt_bed_min" -v cols="$i3_bed_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+      opt_deviation_bed="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_mechCool.awk" -v max='bed' -v min="$cri_tc_opt_bed_min" -v cols="$i3_bed_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     else
       opt_deviation_bed="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_bed_max" -v min="$cri_tc_opt_bed_min" -v cols="$i3_bed_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     fi
@@ -1282,7 +1317,7 @@ $(echo "$opt_deviation_bed" | awk -f "$script_dir/check_deviation_timeStep.awk" 
   fi
   if $get_tc_opt_bath && [ "${#array_bath_zoneNums[@]}" -gt 0 ]; then
     if [ "$cri_tc_opt_bath_max" == 'CIBSE TM52' ]; then
-      opt_deviation_bath="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_freeRun.awk" -v max='bath' -v min="$cri_tc_opt_bath_min" -v cols="$i3_bath_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+      opt_deviation_bath="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_mechCool.awk" -v max='bath' -v min="$cri_tc_opt_bath_min" -v cols="$i3_bath_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     else
       opt_deviation_bath="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_bath_max" -v min="$cri_tc_opt_bath_min" -v cols="$i3_bath_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     fi
@@ -1311,7 +1346,7 @@ $(echo "$opt_deviation_bath" | awk -f "$script_dir/check_deviation_timeStep.awk"
   fi
   if $get_tc_opt_WC && [ "${#array_WC_zoneNums[@]}" -gt 0 ]; then
     if [ "$cri_tc_opt_WC_max" == 'CIBSE TM52' ]; then
-      opt_deviation_WC="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_freeRun.awk" -v max='WC' -v min="$cri_tc_opt_WC_min" -v cols="$i3_WC_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+      opt_deviation_WC="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_mechCool.awk" -v max='WC' -v min="$cri_tc_opt_WC_min" -v cols="$i3_WC_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     else
       opt_deviation_WC="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_WC_max" -v min="$cri_tc_opt_WC_min" -v cols="$i3_WC_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     fi
@@ -1340,7 +1375,7 @@ $(echo "$opt_deviation_WC" | awk -f "$script_dir/check_deviation_timeStep.awk" -
   fi
   if $get_tc_opt_hall && [ "${#array_hall_zoneNums[@]}" -gt 0 ]; then
     if [ "$cri_tc_opt_hall_max" == 'CIBSE TM52' ]; then
-      opt_deviation_hall="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_freeRun.awk" -v max='hall' -v min="$cri_tc_opt_hall_min" -v cols="$i3_hall_cols" "$tmp_dir_tmp/resultant_temp.txt")"
+      opt_deviation_hall="$(awk -f "$script_dir/get_deviation_timeStep_CIBSETM52_mechCool.awk" -v max='hall' -v min="$cri_tc_opt_hall_min" -v cols="$i3_hall_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     else
       opt_deviation_hall="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_tc_opt_hall_max" -v min="$cri_tc_opt_hall_min" -v cols="$i3_hall_cols" "$tmp_dir_tmp/resultant_temp.txt")"
     fi
@@ -1373,12 +1408,13 @@ $(echo "$opt_deviation_hall" | awk -f "$script_dir/check_deviation_timeStep.awk"
 
     # Combine data into a single file.
     awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp"/air_from_ambient_z*.txt > "$tmp_dir_tmp/air_from_ambient.txt"
+    awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp"/air_total_extract_z*.txt > "$tmp_dir_tmp/air_total_extract.txt"
 
     if [ "$cri_aq_fas_min" == 'approved document F' ]; then
       # Approved document F criteria:
       # 5.5: Minimum extract ventilation in -
-      #      kitchens 30 l/s
-      #      bathrooms 15 l/s
+      #      kitchens 13 l/s
+      #      bathrooms 8 l/s
       #      WC 6 l/s
       # 5.6: Minimum whole building l/s ventilation rate
       #      depending on number of bedrooms
@@ -1402,12 +1438,11 @@ $(echo "$aq_fas_deviation_wbvr" | awk -f "$script_dir/check_deviation_timeStep.a
 
       # Assess maximum ventilation rate against minimum extract criteria
       # for kitchens, bathrooms and WCs.
-      # Only assess "to ambient" columns (second for each zone).
       # Get column lists for these zone types.
       i2_col=1
       for i0 in "${array_zone_indices[@]}"; do      
         if [ "${array_zone_AFNnodNums[i0]}" -gt 0 ]; then
-          ((i2_col+=2))
+          ((i2_col+=1))
           i1="$((i0+1))"
           if containsElement "$i1" "${array_kit_zoneNums[@]}"; then
             i2_kit_cols="${i2_kit_cols}${i2_col},"
@@ -1421,9 +1456,9 @@ $(echo "$aq_fas_deviation_wbvr" | awk -f "$script_dir/check_deviation_timeStep.a
         fi
       done
       # Get deviation.
-      aq_fas_deviation_ex_kit="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max='29.99' -v cols="$i2_kit_cols" "$tmp_dir_tmp/air_from_ambient.txt")"
-      aq_fas_deviation_ex_bath="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max='14.99' -v cols="$i2_bath_cols" "$tmp_dir_tmp/air_from_ambient.txt")"
-      aq_fas_deviation_ex_WC="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max='5.99' -v cols="$i2_WC_cols" "$tmp_dir_tmp/air_from_ambient.txt")"
+      aq_fas_deviation_ex_kit="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max='12.99' -v cols="$i2_kit_cols" "$tmp_dir_tmp/air_total_extract.txt")"
+      aq_fas_deviation_ex_bath="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max='7.99' -v cols="$i2_bath_cols" "$tmp_dir_tmp/air_total_extract.txt")"
+      aq_fas_deviation_ex_WC="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max='5.99' -v cols="$i2_WC_cols" "$tmp_dir_tmp/air_total_extract.txt")"
       # Check inverse criteria.
       # If we have any positive deviation, it means the maximum extract
       # rate is above the minimum criterion, so the model passes.
@@ -1437,10 +1472,10 @@ $(echo "$aq_fas_deviation_wbvr" | awk -f "$script_dir/check_deviation_timeStep.a
           if [ "$?" -eq 0 ]; then
             if ! $fail; then fail=true; fi
             if [ "${array_zone_desc[i0]}" == '' ]; then
-              array_zone_desc[i0]="Extract ventilation rate does not meet the requirement of 30 l/ s."
+              array_zone_desc[i0]="Extract ventilation rate does not meet the requirement of 13 l/ s."
             else
               array_zone_desc[i0]="${array_zone_desc[i0]}
-Extract ventilation rate does not meet the requirement of 30 l/ s."
+Extract ventilation rate does not meet the requirement of 13 l/ s."
             fi    
           fi
         fi
@@ -1455,10 +1490,10 @@ Extract ventilation rate does not meet the requirement of 30 l/ s."
           if [ "$?" -eq 0 ]; then
             if ! $fail; then fail=true; fi
             if [ "${array_zone_desc[i0]}" == '' ]; then
-              array_zone_desc[i0]="Extract ventilation rate does not meet the requirement of 15 l/ s."
+              array_zone_desc[i0]="Extract ventilation rate does not meet the requirement of 8 l/ s."
             else
               array_zone_desc[i0]="${array_zone_desc[i0]}
-Extract ventilation rate does not meet the requirement of 15 l/ s."
+Extract ventilation rate does not meet the requirement of 8 l/ s."
             fi    
           fi
         fi

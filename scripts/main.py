@@ -197,14 +197,15 @@ Assessment: '''+s_asmtName+''' \\\\
     f_preamble.close()
 
     # Check assessment script exists.
-    s_asmtScript='../../scripts/assessments/'+s_estateType.replace(' ','_')
+    s_asmtName=s_estateType.replace(' ','_')
+    s_asmtScript='../../scripts/assessments/'+s_asmtName
     if not isfile(s_asmtScript):
         jobError(s_jobID,'resilience assessment script "'+s_asmtScript+'" not found',12,b_debug,f_log,s_shareDir)
     if b_debug: f_log.write('Resilience assessment name: '+s_asmtName+'\nResilience assessment script: '+s_asmtScript+'\n')
 
     # Assemble argument list, noting dummy cases.
     b_dummy=False
-    if s_asmtScript=='Domestic_(free_running)':
+    if s_asmtName=='Domestic_(free_running)':
         s_tmpres='simulation_results'
         s_tmppdf='outputs/feedback.pdf'
         ls_args=['-d','tmp','-f',s_tmpres,'-r',s_tmppdf,'-P','tmp/preamble.txt',s_cfg]+['X' if a is None else a for a in ts_criteria]
@@ -282,8 +283,8 @@ Assessment: '''+s_asmtName+''' \\\\
     i_prgv=9
     con.send(i_prgv)
 
-    # If not a dummy PAM, create tarball of simulation results and model (because you need the model to view results).
-    if not b_dummy:
+    # If not a dummy RA, and the result is a fail, create tarball of simulation results and model (because you need the model to view results).
+    if not b_dummy and i_pFlag==1:
         ls_simRes=glob('simulation_results.*')
         try:
             run(['tar','-czf','res.tar.gz','model']+ls_simRes,check=True)
@@ -623,7 +624,7 @@ Command line arguments:
                 s_asmtName=s_asmtName.capitalize()+' (custom)'
                 try:
                     cursor.execute('''SELECT 
-in01,in02,in03,in04,in05,in06,in07,in08,in09,in10
+in01,in02,in03,in04,in05,in06,in07,in08,in09,in10,
 in11,in12,in13,in14,in15,in16,in17,in18,in19,in20,
 in21,in22,in23,in24,in25,in26,in27,in28,in29,in30
 FROM model_inputs WHERE result = '''+str(i_jobID))
@@ -639,7 +640,7 @@ FROM model_inputs WHERE result = '''+str(i_jobID))
                 s_asmtName=s_asmtName.capitalize()
                 try:
                     cursor.execute('''SELECT 
-in01,in02,in03,in04,in05,in06,in07,in08,in09,in10
+in01,in02,in03,in04,in05,in06,in07,in08,in09,in10,
 in11,in12,in13,in14,in15,in16,in17,in18,in19,in20,
 in21,in22,in23,in24,in25,in26,in27,in28,in29,in30
 FROM presets WHERE id = '''+str(i_preset))
@@ -792,20 +793,16 @@ FROM presets WHERE id = '''+str(i_preset))
                                     printError('job ID {:d} didn\'t give performance flag'.format(i_model),s_errlog,b_debug)
                                     i_update=9
                             if i_tmp==0: 
-                                i_update=3 # compliant
+                                i_update=3 # pass
                             elif i_tmp==1: 
-                                i_update=5 # minor problem
-                            elif i_tmp==2: 
-                                i_update=4 # major problem
-                            elif i_tmp==3: 
-                                i_update=6 # advisory?
+                                i_update=2 # fail
                             else:
                                 # Unexpected performance flag.
                                 # Again, this shouldn't really be possible.
                                 printError('job ID {:d} gave unrecognised performance flag'.format(i_model),s_errlog,b_debug)
                                 i_update=9
                         else:
-                            i_update=2
+                            i_update=9
                         # Close pipe and remove dictionary entries.
                         sender.close()
                         con.close()
@@ -844,18 +841,15 @@ FROM presets WHERE id = '''+str(i_preset))
                         if i_tmp==0: 
                             i_update=3
                         elif i_tmp==1: 
-                            i_update=5
-                        elif i_tmp==2: 
-                            i_update=4
-                        elif i_tmp==3: 
-                            i_update=6
+                            i_update=2
                         else:
                             # Unexpected performance flag.
                             # This shouldn't really be possible.
                             printError('job ID {:d} gave unrecognised performance flag'.format(i_model),s_errlog,b_debug)
                             i_update=9
                     elif proc.exitcode!=0:
-                        i_update=2
+                        printError('job ID {:d} failed'.format(i_model),s_errlog,b_debug)
+                        i_update=9
                     else:
                         printError('job ID {:d} didn\'t give exit signal'.format(i_model),s_errlog,b_debug)
                         i_update=9
@@ -863,7 +857,7 @@ FROM presets WHERE id = '''+str(i_preset))
                     del dict_proc[s_jobID]
                     del dict_pipe[s_jobID]
 
-                if i_update==3 or i_update==4 or i_update==5 or i_update==6:
+                if i_update==2 or i_update==3 or i_update==4:
                     if b_debug: print('Marathon: *** job complete ***')
 
                 elif i_update==1:
@@ -872,7 +866,7 @@ FROM presets WHERE id = '''+str(i_preset))
                 elif i_update>10 and i_update<20:
                     if b_debug: print('Marathon: *** job still running ***')
 
-                elif i_update==2:
+                elif i_update==9:
                     if b_debug: print('Marathon: !!! job failed !!!')
 
             elif i_progress==7:
@@ -930,22 +924,19 @@ FROM presets WHERE id = '''+str(i_preset))
                         if i_tmp==4:
                             b_done=True
                     con.close()
-                    if b_done and proc.exitcode==0:
+                    if b_done and proc.exitcode==0:                     
                         if i_tmp==0: 
                             i_update=3
                         elif i_tmp==1: 
-                            i_update=5
-                        elif i_tmp==2: 
-                            i_update=4
-                        elif i_tmp==3: 
-                            i_update=6
+                            i_update=2
                         else:
                             # Unexpected performance flag.
                             # This shouldn't really be possible.
                             if b_debug: print('Marathon: !!! job gave unrecognised performance flag !!!')
                             i_update=9
                     elif proc.exitcode!=0:
-                        i_update=2
+                        printError('job ID {:d} failed'.format(i_model),s_errlog,b_debug)
+                        i_update=9
                     else:
                         if b_debug: print('Marathon: !!! job didn\'t give exit signal !!!')
                         i_update=9
@@ -953,10 +944,10 @@ FROM presets WHERE id = '''+str(i_preset))
                     del dict_proc[s_jobID]
                     del dict_pipe[s_jobID]
 
-                    if i_update==3 or i_update==4 or i_update==5 or i_update==6:
+                    if i_update==2 or i_update==3 or i_update==4:
                         if b_debug: print('Marathon: *** job complete ***')
 
-                    elif i_update==2:
+                    elif i_update==9:
                         printError('job ID {:d} failed'.format(i_model),s_errlog,b_debug)
             
             # Update sql database with new job status.
