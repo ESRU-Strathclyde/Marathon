@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # v2.1a ESRU 2017
 
@@ -6,6 +6,7 @@
 # Script to query an ESP-r model for various data.
 # "./esp-query.py -h" for help.
 
+from pathlib import Path
 
 # FUNCTION getLine
 # Get the nth line down in file f, return in list split by whitespace.
@@ -782,8 +783,15 @@ for s_line in f_cfg:
             ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+ls_line[1]
             lb_outputs[i_ind]=False
         elif ls_line[0]=='*stdclm':
-            # TODO: this path is currently hardcoded
-            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+'/home/esru-sim-server/esru_cowie/climate/'+ls_line[1]
+            # Get climate location from .esprc file.
+            f_esprc=open(Path.home() / '.esprc','r')
+            for s_line2 in f_esprc:
+                ls_line2=s_line2.strip().split(',')
+                if ls_line2[0]=='*db_climates':
+                    s_clmpath=str(Path(ls_line2[2]).parent)
+                    break
+            f_esprc.close()
+            ls_outputVals[i_ind]=ls_outputs[i_ind]+'='+s_clmpath+'/'+ls_line[1]
             lb_outputs[i_ind]=False
 
     # Get QA file.

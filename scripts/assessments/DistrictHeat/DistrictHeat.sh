@@ -33,7 +33,7 @@ results_file="simulation_results"
 start="1 1"
 finish="31 12"
 year="2020"
-timesteps=1
+timesteps=60
 startup=5
 preset=""
 tmp_dir="./tmp"
@@ -310,11 +310,11 @@ if $is_plant; then
     # We are looking for:
     # components with "gen" in the name, taken as generators
     # components with "load" in the name, taken as loads
-    # component indices 44, 116, ... 
+    # component indices 43, 116, ... 
     # do not have "additional outputs" in ESP-r terms, so must be
     # omitted when forming component index lists.
     # TODO: this list is not exhaustive
-    array_nonAO_pcomp_nums=(44 116)
+    array_nonAO_pcomp_nums=(43 116)
     array_pcomp_nums=($plant_components)
     array_pcomp_names=($plant_comp_names)
     if [ "${#array_pcomp_nums[@]}" -ne "${#array_pcomp_names[@]}" ]; then
@@ -352,7 +352,7 @@ if $is_plant; then
       if [[ "$pcomp_name" == *load* ]]; then
         ((i0_pcomp_load++))
         array_pcomp_load_inds[i0_pcomp_load]="$i1_pcomp"
-        array_pcomp_load_names[i0_pcomp_load]="$pcomp_name"
+        array_pcomp_load_names[i1_pcomp]="$pcomp_name"
       fi
       ((i0_pcomp++))
     done
@@ -448,8 +448,7 @@ fi
 if $is_building; then sim_results="${results_file}.res"; fi
 if $is_afn; then mf_results="${results_file}.mfr"; fi
 if $is_CFD; then cfd_results="${results_file}.dfr"; fi
-if $is_plant; then plr_results="${results_file}.plr"; fi
-
+if $is_plant; then plt_results="${results_file}.plr"; fi
 
 
 
@@ -471,13 +470,12 @@ if $do_indra; then
 
   # Train indra from the seed weather file.
   mkdir "$tmp_dir/indra"
-  python3 "$common_dir/SyntheticWeather/indra.py" --train 1 --station_code 'ra' --n_samples "$num_years" --path_file_in "$tmp_dir/weather_base.txt" --path_file_out "$weather_base_abs.txt" --file_type 'espr' --store_path "$tmp_dir/indra" > "$tmp_dir/indra.out"
+  python3 "$common_dir/SyntheticWeather/indra.py" --train 1 --station_code 'ra' --n_samples "$num_years" --path_file_in "$tmp_dir/weather_base.txt" --path_file_out "$weather_base_abs.txt" --file_type 'espr' --store_path "$tmp_dir/indra" 1>"$tmp_dir/indra.out" 2>&1
   if [ $? -ne 0 ]; then
     echo "Error: failed to train indra."
     exit 666
   fi
 fi
-
 
 # Set up paths.
 if [ "X$up_one" == "X" ]; then
@@ -657,6 +655,8 @@ ${bps_script}
 
   # * EXTRACT RESULTS *
 
+  rm "$tmp_dir_tmp/res.script" "$tmp_dir_tmp/res.out" 1>/dev/null 2>&1
+
   # Update progress file.
   echo '4' > "$tmp_dir_tmp/progress.txt"
 
@@ -763,99 +763,97 @@ i
 
   if $is_plant; then
     # Get timestep energy generated.
-    res_script="$res_script
->
-${tmp_dir_tmp}/gen_kW.txt
-"
     for pcomp_gen_ind in "${array_AO_pcomp_gen_inds[@]}"; do
+      i_pad="$(printf "%03d" $pcomp_gen_ind)"
       res_script="$res_script
+>
+b
+${tmp_dir_tmp}/gen_kW_c${i_pad}.txt
+
 h
 <
 1
 ${pcomp_gen_ind}
 c
--"
-    done
-    res_script="$res_script
+-
 !
 >
 /"
+    done
 
     # Get timestep generator efficiency.
-    res_script="$res_script
->
-${tmp_dir_tmp}/gen_efficiency_frac.txt
-"
     for pcomp_gen_ind in "${array_AO_pcomp_gen_inds[@]}"; do
+      i_pad="$(printf "%03d" $pcomp_gen_ind)"
       res_script="$res_script
+>
+b
+${tmp_dir_tmp}/gen_efficiency_frac_c${i_pad}.txt
+
 h
 <
 1
 ${pcomp_gen_ind}
 b
--"
-    done
-    res_script="$res_script
+-
 !
 >
 /"
+    done
 
     # Get timestep energy consumed.
-    res_script="$res_script
->
-${tmp_dir_tmp}/load_W.txt
-"
     for pcomp_load_ind in "${array_AO_pcomp_load_inds[@]}"; do
+      i_pad="$(printf "%03d" $pcomp_load_ind)"
       res_script="$res_script
+>
+b
+${tmp_dir_tmp}/load_W_c${i_pad}.txt
+
 h
 <
 1
 ${pcomp_load_ind}
 a
--"
-    done
-    res_script="$res_script
+-
 !
 >
 /"
+    done
 
     # Get timestep residual demand.
-    res_script="$res_script
->
-${tmp_dir_tmp}/load_residual_W.txt
-"
     for pcomp_load_ind in "${array_AO_pcomp_load_inds[@]}"; do
+      i_pad="$(printf "%03d" $pcomp_load_ind)"
       res_script="$res_script
+>
+b
+${tmp_dir_tmp}/load_residual_W_c${i_pad}.txt
+
 h
 <
 1
 ${pcomp_load_ind}
 c
--"
-    done
-    res_script="$res_script
+-
 !
 >
 /"
+    done
 
     # Get timestep return temperatures.
-    res_script="$res_script
->
-${tmp_dir_tmp}/return_temps.txt
-"
     for pcomp_load_ind in "${array_pcomp_load_inds[@]}"; do
+      i_pad="$(printf "%03d" $pcomp_load_ind)"
       res_script="$res_script
+>
+b
+${tmp_dir_tmp}/return_temps_c${i_pad}.txt
+
 a
 <
 1
 ${pcomp_load_ind}
-c
--"
-    done
-    res_script="$res_script
 !
 >
 /"
+    done
   fi
 
   res_script="$res_script
@@ -873,29 +871,45 @@ ${res_script}
 
   # * PROCESS RESULTS *
 
+  # Combine column data.
+  awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp/"gen_kW_c*.txt > "$tmp_dir_tmp/gen_kW.txt"
+  awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp/"load_W_c*.txt > "$tmp_dir_tmp/load_W.txt"
+
+  # Convert W to Wh.
+  WtoWh="$(echo "$timesteps" | awk '{print 1/$1}')"
+  awk -f "$script_dir/convert_timeStep.awk" -v mult="$WtoWh" "$tmp_dir_tmp/gen_kW.txt" > "$tmp_dir_tmp/gen_kWh.txt"
+  awk -f "$script_dir/convert_timeStep.awk" -v mult="$WtoWh" "$tmp_dir_tmp/load_W.txt" > "$tmp_dir_tmp/load_Wh.txt"
+
   # Aggregate energy generated.
-  total_gen_kW="$(awk -f "$script_dir/aggregate_all.awk" "$tmp_dir_tmp/gen_kW.txt")"
+  total_gen_kWh="$(awk -f "$script_dir/aggregate_all.awk" "$tmp_dir_tmp/gen_kWh.txt")"
+  echo "total_gen_kWh $total_gen_kWh"
 
   # Aggregate energy consumed.
-  total_load_W="$(awk -f "$script_dir/aggregate_all.awk" "$tmp_dir_tmp/load_W.txt")"
+  total_load_Wh="$(awk -f "$script_dir/aggregate_all.awk" "$tmp_dir_tmp/load_Wh.txt")"
+  echo "total_load_Wh $total_load_Wh"
 
   # Energy generated - energy consumed = energy lost
-  total_loss_kW="$(echo "$total_gen_kW" "$total_load_W" | awk '{print $1-($2/1000)}')"
+  total_loss_kWh="$(echo "$total_gen_kWh" "$total_load_Wh" | awk '{print $1+($2/1000)}')"
+  echo "total_loss_kWh $total_loss_kWh"
 
   # Check loss as a percentage of energy generated.
-  loss_perc="$(echo "$total_loss_kW" "$total_gen_kW" | awk '{print $1/$2*100}')"
+  loss_perc="$(echo "$total_loss_kWh $total_gen_kWh" | awk '{print $1/$2*100}')"
+  echo "loss_perc $loss_perc"
   echo "$loss_perc" > "$tmp_dir_tmp/loss_perc.txt"
 
   # Now check deviation and check for failure.
   loss_deviation="$(awk -f "$script_dir/get_deviation_value.awk" -v max="$cri_loss" "$tmp_dir_tmp/loss_perc.txt")"
   loss_limit="$(echo "$cri_loss" | awk '{print $1*'"${limit_multiplier}}")"
   desc="${desc}
-$(echo "$loss_deviation" | awk -f "$script_dir/check_deviation_value.awk" -v max="$loss_limit" -v met='Network losses' -v unit='kW')"
+$(echo "$loss_deviation" | awk -f "$script_dir/check_deviation_value.awk" -v max="$loss_limit" -v met='Network losses' -v unit='%')"
   if ! $fail; then
     if [ "$?" -eq 1 ]; then fail=true; fi
   fi
 
   # Check residual demand.
+  # Combine column data.
+  awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp/"load_residual_W_c*.txt > "$tmp_dir_tmp/load_residual_W.txt"
+
   # Results from ESP-r are in W, so convert to kW first.
   load_residual_kW="$(awk -f "$script_dir/convert_timeStep.awk" -v mult=0.001 "$tmp_dir_tmp/load_residual_W.txt")"
   echo "$load_residual_kW" > "$tmp_dir_tmp/load_residual_kW.txt"
@@ -903,10 +917,9 @@ $(echo "$loss_deviation" | awk -f "$script_dir/check_deviation_value.awk" -v max
   # Now check deviation and failure
   resid_deviation="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_resid" "$tmp_dir_tmp/load_residual_kW.txt")"
   i2_col=1
-  for i1 in "$array_AO_pcomp_load_inds[@]"; do
-    i0="$((i1-1))"
+  for i1 in "${array_pcomp_load_inds[@]}"; do
     ((i2_col++))
-    array_load_desc[i0]="${array_load_desc[i0]}
+    array_load_desc[i1]="${array_load_desc[i1]}
 $(echo "$resid_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v col="$i2_col" -v max="0" -v perc='10' -v met='Residual demand' -v unit='kW' -v notocc='1')"
     if ! $fail; then
       if [ "$?" -eq 1 ]; then fail=true; fi
@@ -914,31 +927,35 @@ $(echo "$resid_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v
   done
 
   # Check boiler efficiency.
+  # Combine column data.
+  awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp/"gen_efficiency_frac_c*.txt > "$tmp_dir_tmp/gen_efficiency_frac.txt"
+
   # Convert efficiency fraction to percentage.
   gen_efficiency_perc="$(awk -f "$script_dir/convert_timeStep.awk" -v mult=100 "$tmp_dir_tmp/gen_efficiency_frac.txt")"
   echo "$gen_efficiency_perc" > "$tmp_dir_tmp/gen_efficiency_perc.txt"
 
   # Now check deviation and failure.
-  eff_deviation="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_eff" "$tmp_dir_tmp/gen_efficiency_perc.txt")"
+  eff_deviation="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v min="$cri_eff" "$tmp_dir_tmp/gen_efficiency_perc.txt")"
   i2_col=1
-  for i1 in "$array_AO_pcomp_load_inds[@]"; do
-    i0="$((i1-1))"
+  for i1 in "${array_pcomp_load_inds[@]}"; do
     ((i2_col++))
-    array_load_desc[i0]="${array_load_desc[i0]}
-$(echo "$eff_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v col="$i2_col" -v max="0" -v perc='10' -v met='Generator efficiency' -v unit='%' -v notocc='1')"
+    array_load_desc[i1]="${array_load_desc[i1]}
+$(echo "$eff_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v col="$i2_col" -v min="0" -v perc='10' -v met='Generator efficiency' -v unit='%' -v notocc='1')"
     if ! $fail; then
       if [ "$?" -eq 1 ]; then fail=true; fi
     fi
   done
 
   # Check return temperatures.
+  # Combine column data.
+  awk -f "$script_dir/combine_columnData.awk" "$tmp_dir_tmp/"return_temps_c*.txt > "$tmp_dir_tmp/return_temps.txt"
+
   temp_limit="$(echo "$cri_temp" | awk '{print $1*'"${limit_multiplier}}")"
   temp_deviation="$(awk -f "$script_dir/get_deviation_timeStep.awk" -v max="$cri_temp" "$tmp_dir_tmp/return_temps.txt")"
   i2_col=1
-  for i1 in "$array_pcomp_load_inds[@]"; do
-    i0="$((i1-1))"
+  for i1 in "${array_pcomp_load_inds[@]}"; do
     ((i2_col++))
-    array_load_desc[i0]="${array_load_desc[i0]}
+    array_load_desc[i1]="${array_load_desc[i1]}
 $(echo "$temp_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v col="$i2_col" -v max="$temp_limit" -v perc='10' -v met='Load return temperature' -v unit='C' -v notocc='1')"
     if ! $fail; then
       if [ "$?" -eq 1 ]; then fail=true; fi
@@ -952,7 +969,7 @@ $(echo "$temp_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v 
   echo "$temp_deviation" > "$tmp_dir_tmp/temp_deviation.trace"
   echo "$desc" > "$tmp_dir_tmp/desc.trace"
   i=0
-  for s in "${array_load_names[@]}"; do
+  for s in "${array_pcomp_load_names[@]}"; do
     echo "Load ${s}:" >> "$tmp_dir_tmp/desc.trace"
     echo "${array_load_desc[i]}" >> "$tmp_dir_tmp/desc.trace"
     ((i++))
@@ -1004,11 +1021,11 @@ $(echo "$temp_deviation" | awk -f "$script_dir/check_deviation_timeStep.awk" -v 
       echo '\item '"${l//%/\\%}" >> "$report"
     done
     i=0
-    for s in "${array_load_names[@]}"; do
-      if ! [ "X$(echo ${array_load_desc[i]})" == 'X' ]; then      
+    for i in "${array_pcomp_load_inds[@]}"; do
+      if ! [ "X${array_load_desc[i]}" == 'X' ]; then   
         IFS=$'\n' read -rd '' -a array_desc <<< "${array_load_desc[i]}"
         # if [ "${#array_desc[@]}" -gt 0 ]; then
-        echo '\item At load ``'"${array_load_names[i]}\"": >> "$report"        
+        echo '\item At load ``'"${array_pcomp_load_names[i]}\"": >> "$report"        
         echo '\begin{itemize}' >> "$report"
         for l in "${array_desc[@]}"; do
           echo '\item '"${l//%/\\%}" >> "$report"

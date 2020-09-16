@@ -45,7 +45,7 @@ from setproctitle import setproctitle
 
 def runFakeJob(s_jobID): 
     
-    setproctitle('Marathon'+s_jobID)
+    setproctitle('marathon'+s_jobID)
 
     s_jobDir=getJobDir(s_jobID)
     if isdir(s_jobDir):
@@ -58,7 +58,7 @@ def runFakeJob(s_jobID):
 
 def runJob(s_jobID,s_tarball,s_MD5,s_building,s_estate,s_estateType,s_asmtName,ts_criteria,b_debug,con,s_shareDir):
 
-    setproctitle('Marathon'+s_jobID)
+    setproctitle('marathon'+s_jobID)
 
     s_jobDir=getJobDir(s_jobID)
     if isdir(s_jobDir):
@@ -205,10 +205,9 @@ Assessment: '''+s_asmtName+''' \\\\
 
     # Assemble argument list, noting dummy cases.
     b_dummy=False
-    if s_asmtName=='Domestic_(free_running)':
-        s_tmpres='simulation_results'
-        s_tmppdf='outputs/feedback.pdf'
-        ls_args=['-d','tmp','-f',s_tmpres,'-r',s_tmppdf,'-P','tmp/preamble.txt',s_cfg]+['X' if a is None else a for a in ts_criteria]
+    s_tmpres='simulation_results'
+    s_tmppdf='outputs/feedback.pdf'
+    ls_args=['-d','tmp','-f',s_tmpres,'-r',s_tmppdf,'-P','tmp/preamble.txt',s_cfg]+['X' if a is None else a for a in ts_criteria]
 
     # Set handler so that the PAM will be killed if the job is killed.
     libc = ctypes.CDLL("libc.so.6")
@@ -444,7 +443,7 @@ def printError(s_msg,s_errlog,b_debug):
 
 def main():
 
-    setproctitle('Marathon')
+    setproctitle('marathon')
 
     # Set defaults.
     r_interval=15
