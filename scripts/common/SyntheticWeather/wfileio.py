@@ -152,7 +152,8 @@ def get_weather(stcode, fpath, file_type="epw"):
             locdata = None
 
     # End file_type if statement.
-    print('stcode '+stcode)
+
+
     locdata["loc"] = stcode
 
     if wdata is None:
@@ -178,6 +179,7 @@ def get_weather(stcode, fpath, file_type="epw"):
             ~((date_index.day == 29) & (date_index.month == 2))]
 
         return wdata, locdata, header
+
 
 
 def read_fin4(fpath):
@@ -211,17 +213,22 @@ def read_fin4(fpath):
                                    (temp_index.month == 2))]
 
     wdata = wdata.dropna(axis=1, how='all')
+
     for col in wdata.columns:
+
         wdata[col] = wdata[col].apply(
             lambda x: float(''.join(re.findall('[0-9.-]', x))))
+
         if col in ['year', 'month', 'day', 'hour']:
             wdata[col] = wdata[col].apply(lambda x: int(x))
 
     wdata = petite.remove_leap_day(wdata)
+
     wdata['rh'] = pd.Series(petite.calc_rh(wdata['tdb'], wdata['tdp']),
                             index=wdata.index)
 
     return wdata, locdata, header
+
 
 
 # Number of days in each month.
@@ -239,6 +246,7 @@ def day_of_year(month, day):
     return doy
 
 # End function day_of_year
+
 
 
 def day_of_month(day):
@@ -300,17 +308,10 @@ def read_epw(fpath, epw_colnames=epw_colnames):
                         header=None, names=epw_colnames,
                         index_col=False)
 
-    year = np.unique(wdata['year'])[0]
+    if len(wdata['year'].unique()) > 1:
+        wdata['year'] = 2223
 
-    if isinstance(year, list):
-        print('Found multiple years in file name, assigning 2223.')
-        year = '2223'
-
-    # Uniform date index for all tmy weather data tables.
-    dates = pd.date_range(
-        start="{:d}-01-01 00:00:00".format(year),
-        end="{:d}-12-31 23:00:00".format(year),
-        freq="1H")
+    dates= pd.date_range(start='{}-01-01 00:00:00'.format(wdata['year'].unique()[0]), end='{}-12-31 23:00:00'.format(wdata['year'].unique()[0]), freq='1H')
 
     if len(dates) > wdata.shape[0]:
         dates = dates[~((dates.month == 2) & (dates.day == 29))]
@@ -344,6 +345,7 @@ def read_epw(fpath, epw_colnames=epw_colnames):
     return wdata, locdata, header
 
 # ----------- END read_epw function -----------
+
 
 
 def read_espr(fpath):
@@ -694,13 +696,18 @@ def give_weather(df, locdata, stcode, header,
         # puts in a newline character after the header anyway.
         header[-1] = header[-1][:-1]
 
+
         # These columns will be replaced.
         epw_columns = ["tdb", "tdp", "rh", "ghi", "dni", "dhi", "wspd", "wdr"]
+
+
         for col in epw_columns:
             epw_master.loc[:, col] = df[col].values
 
         # Replace the year of the master file.
         epw_master["year"] = year
+
+
 
         np.savetxt(filepath, df.values, fmt=epw_fmt,
                    delimiter=",", header="".join(header),
